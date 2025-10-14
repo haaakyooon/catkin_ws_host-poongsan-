@@ -5,3 +5,4 @@ log/
 *.pyc
 __pycache__/
 src/CMakeLists.txt
+src/EPIC/src/MARSIM/map_generator/resource/garage.pcd
