@@ -1,0 +1,59 @@
+<launch>
+  <!-- Host PC simulation and visualization for EPIC (AVIA LiDAR) -->
+  <!-- This provides AVIA LiDAR pointcloud and odometry data to ARM target board -->
+  
+  <arg name="map_name" default="garage" />
+  <arg name="odom_topic" value="/quad_0/lidar_slam/odom" />
+  <arg name="sensing_horizon_mid360" value="60.0" />
+  <arg name="use_mid360" value="true" />
+  
+  <!-- ROS Master runs here on host PC -->
+  <!-- ARM board should connect with ROS_MASTER_URI=http://THIS_PC_IP:11311 -->
+  
+  <!-- Waypoint generator for manual goal setting -->
+  <node pkg="waypoint_generator" name="waypoint_generator" type="waypoint_generator" output="screen">
+    <remap from="~odom" to="$(arg odom_topic)" />
+    <remap from="~goal" to="/move_base_simple/goal" />
+    <remap from="~traj_start_trigger" to="/traj_start_trigger" />
+    <param name="waypoint_type" value="point" />
+  </node>
+
+  <!-- Odometry visualization -->
+  <node pkg="odom_visualization" name="quad0_odom_visualization" type="odom_visualization" output="screen">
+    <remap from="~odom" to="$(arg odom_topic)" />
+    <param name="init_x" value="0.0" />
+    <param name="init_y" value="0.0" />
+    <param name="init_z" value="1.0" />
+    <param name="color/a" value="1.0" />
+    <param name="color/r" value="0.0" />
+    <param name="color/g" value="1.0" />
+    <param name="color/b" value="1.0" />
+    <param name="covariance_scale" value="100.0" />
+    <param name="robot_scale" value="1.0" />
+    <param name="quadrotor_name" value="quad0" />
+    <param name="drone_id" value="0" />
+    <param name="mesh_resource" value="package://odom_visualization/meshes/yunque.dae" />
+  </node>
+  
+  <!-- MARS simulation environment -->
+  <include file="$(find mars_drone_sim)/launch/$(arg map_name).launch">
+    <arg name="sensing_horizon" value="$(arg sensing_horizon_mid360)" />
+  </include>
+
+  <!-- AVIA LiDAR Configuration for Simulation -->
+  <param name="/quad0_pcl_render_node/is_360lidar" value="0" />
+  <param name="/quad0_pcl_render_node/vertical_fov" value="70.0" />
+  <param name="/quad0_pcl_render_node/yaw_fov" value="120.0" />
+  <param name="/quad0_pcl_render_node/use_avia_pattern" value="1" />
+  <param name="/quad0_pcl_render_node/use_minicf_pattern" value="0" />
+  <param name="/quad0_pcl_render_node/use_os128_pattern" value="0" />
+  <param name="/quad0_pcl_render_node/use_vlp32_pattern" value="0" />
+  <param name="/quad0_pcl_render_node/sensing_horizon" value="10.0" />
+
+  <!-- RViz visualization -->
+  <include file="$(find epic_planner)/launch/rviz.launch" />
+  
+  <!-- Note: Control is handled by ARM target board, not host PC -->
+  <!-- Host PC only provides sensor data and visualization -->
+
+</launch> 
