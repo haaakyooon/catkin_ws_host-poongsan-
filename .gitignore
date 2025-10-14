@@ -4,3 +4,4 @@ devel/
 log/
 *.pyc
 __pycache__/
+src/CMakeLists.txt
