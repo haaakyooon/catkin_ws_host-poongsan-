@@ -3,6 +3,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Path.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <trajectory_msgs/MultiDOFJointTrajectory.h>
 #include <traj_utils/PolyTraj.h>
 #include <gcopter/trajectory.hpp>
 
@@ -15,6 +16,7 @@ private:
     ros::Publisher discrete_path_pub_;        // nav_msgs/Path
     ros::Publisher discrete_points_pub_;      // visualization_msgs/MarkerArray
     ros::Publisher discrete_poses_pub_;       // geometry_msgs/PoseStamped array
+    ros::Publisher multidof_traj_pub_;        // trajectory_msgs/MultiDOFJointTrajectory
     
     std::shared_ptr<Trajectory<7>> current_traj_;
     std::shared_ptr<Trajectory<5>> current_yaw_traj_;
@@ -35,6 +37,7 @@ public:
         discrete_path_pub_ = nh_.advertise<nav_msgs::Path>("/trajectory/discrete_path", 10);
         discrete_points_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/trajectory/discrete_points", 10);
         discrete_poses_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/trajectory/discrete_poses", 100);
+        multidof_traj_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/trajectory/multidof_trajectory", 10);
         
         // Subscribers
         traj_sub_ = nh_.subscribe("/planning/trajectory", 10, &TrajectoryDiscreteSampler::trajectoryCallback, this);
@@ -97,6 +100,12 @@ public:
         points_marker.color.r = 0.0; points_marker.color.g = 1.0; points_marker.color.b = 0.0; points_marker.color.a = 1.0;
         points_marker.scale.x = 0.1; points_marker.scale.y = 0.1; points_marker.scale.z = 0.1;
         
+        // Prepare MultiDOFJointTrajectory message
+        trajectory_msgs::MultiDOFJointTrajectory multidof_msg;
+        multidof_msg.header.stamp = ros::Time::now();
+        multidof_msg.header.frame_id = "odom";
+        multidof_msg.joint_names.push_back("base_link");
+        
         int sample_count = 0;
         
         // Sample at T-second intervals for N seconds
@@ -106,6 +115,7 @@ public:
             // Get position, velocity, acceleration
             Eigen::Vector3d pos = current_traj_->getPos(t);
             Eigen::Vector3d vel = current_traj_->getVel(t);
+            Eigen::Vector3d acc = current_traj_->getAcc(t);
             
             // Create PoseStamped for path
             geometry_msgs::PoseStamped pose_stamped;
@@ -136,6 +146,42 @@ public:
             // Publish individual pose
             discrete_poses_pub_.publish(pose_stamped);
             
+            // Create MultiDOFJointTrajectoryPoint
+            trajectory_msgs::MultiDOFJointTrajectoryPoint multidof_point;
+            
+            // Transform (position and orientation)
+            geometry_msgs::Transform transform;
+            transform.translation.x = pos(0);
+            transform.translation.y = pos(1);
+            transform.translation.z = pos(2);
+            transform.rotation = pose_stamped.pose.orientation;
+            multidof_point.transforms.push_back(transform);
+            
+            // Velocity (linear and angular)
+            geometry_msgs::Twist velocity;
+            velocity.linear.x = vel(0);
+            velocity.linear.y = vel(1);
+            velocity.linear.z = vel(2);
+            velocity.angular.x = 0.0;
+            velocity.angular.y = 0.0;
+            velocity.angular.z = 0.0;
+            multidof_point.velocities.push_back(velocity);
+            
+            // Acceleration (linear and angular)
+            geometry_msgs::Twist acceleration;
+            acceleration.linear.x = acc(0);
+            acceleration.linear.y = acc(1);
+            acceleration.linear.z = acc(2);
+            acceleration.angular.x = 0.0;
+            acceleration.angular.y = 0.0;
+            acceleration.angular.z = 0.0;
+            multidof_point.accelerations.push_back(acceleration);
+            
+            // Time from start
+            multidof_point.time_from_start = ros::Duration(t);
+            
+            multidof_msg.points.push_back(multidof_point);
+            
             sample_count++;
         }
         
@@ -144,6 +190,7 @@ public:
         // Publish all messages
         discrete_path_pub_.publish(path_msg);
         discrete_points_pub_.publish(marker_array);
+        multidof_traj_pub_.publish(multidof_msg);
         
         ROS_INFO("[Trajectory Sampler] Sampled %d points at %.3fs intervals over %.3fs duration", 
                  sample_count, sample_interval_, sampling_duration);
